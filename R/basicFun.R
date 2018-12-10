@@ -78,10 +78,8 @@ cond.var=function(Y,Z,min.p=0.99){
 RobustPoi0 <- function(x){
     tt=table(x)
     n0=sum(x==0)
-    if (names(tt)[1]=="0") {
-        xx=as.numeric(names(tt))[-1]
-        tt=as.vector(tt)[-1]
-    }    
+    xx=as.numeric(names(tt))[-which(names(tt) <= 0)]
+    tt=as.vector(tt)[-which(names(tt) <= 0)]
     tt=log(tt)+log(gamma(1+xx))
     ##fit the regression without N0
     beta=lm(tt~xx,weight=1/exp(xx))$coef
