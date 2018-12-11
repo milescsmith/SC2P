@@ -8,11 +8,13 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
     if (isTRUE(parallel)){
         par1=future_apply(Y,2,function(yy) {
             yy=yy[yy<=15]
-            RobustPoi0(yy)})   
+            RobustPoi0(yy)
+        })   
     } else {
         par1=apply(Y,2,function(yy) {
             yy=yy[yy<=15]
-            RobustPoi0(yy)})
+            RobustPoi0(yy)
+        })
     }
     pi0.hat=Cell0/(par1[1,]+(1-par1[1,])*dpois(0,par1[2,]))
     if (any((pi0.hat > 1))) {warning("Zero proportion is greater than estimation.")}
@@ -56,14 +58,16 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
     den.fg = den.bg = NA*Y
     
     if (isTRUE(parallel)){
-        future_apply(1:ncol(Y), function(i)){
+        future_apply(1:ncol(Y), function(i){
             den.bg[,i]=dZinf.pois(Y[,i], par1[1,i], par1[2,i])
             den.fg[,i]=dLNP2(x=Y[,i], mu=mu.g1, sigma=sd.g2, l=L[i])
+            })
     }
     } else {
-        apply(1:ncol(Y), function(i)){
+        apply(1:ncol(Y), function(i){
             den.bg[,i]=dZinf.pois(Y[,i], par1[1,i], par1[2,i])
             den.fg[,i]=dLNP2(x=Y[,i], mu=mu.g1, sigma=sd.g2, l=L[i])
+            })
     }
     Z.fg=sweep(den.fg,2,1-pi0.hat,FUN="*")
     Z.bg=sweep(den.bg,2,pi0.hat,FUN="*")
@@ -73,13 +77,13 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
 ### if I shrink mu.g
     den.fg2 = NA*Y
     if (isTRUE(parallel)){
-        future_apply(1:ncol(Y), function(i)){
+        future_apply(1:ncol(Y), function(i){
             den.fg2[,i]= dLNP2(x=Y[,i], mu=mu.g2, sigma=sd.g2, l=L[i])
-        }
+        })
     } else {
-        apply(1:ncol(Y), function(i)){
+        apply(1:ncol(Y), function(i){
             den.fg2[,i]= dLNP2(x=Y[,i], mu=mu.g2, sigma=sd.g2, l=L[i])
-        }
+        })
     }
     Z.fg2=sweep(den.fg2,2,1-pi0.hat,FUN="*")
     post.Z2=Z.fg2/(Z.fg2+Z.bg)
@@ -92,7 +96,7 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
     Xlim=range(mu.g1)
     
     if (isTRUE(parallel)){
-        future_apply(1:ncol(Y), function(i)){
+        future_apply(1:ncol(Y), function(i){
             tmp.y=log2(1+Y[,i])-mu.g2
             subset= post.Z2[,i] > .99
             lm1 <- loess(tmp.y~mu.g1,
@@ -101,8 +105,9 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
                          degree=1,
                          span=.3)
             Offset[subset,i]=lm1$fitted
+        })
     } else {
-            apply(1:ncol(Y), function(i)){
+        apply(1:ncol(Y), function(i){
             tmp.y=log2(1+Y[,i])-mu.g2
             subset= post.Z2[,i] > .99
             lm1 <- loess(tmp.y~mu.g1,
@@ -111,6 +116,7 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
                          degree=1,
                          span=.3)
             Offset[subset,i]=lm1$fitted
+        })
     }
 ##################################################
     ## assemble the estimators into sc2pSet object
