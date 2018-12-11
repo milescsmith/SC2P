@@ -1,8 +1,18 @@
+#' eset2Phase
+#'
+#' @param eset 
+#' @param low.prob 
+#' @param parallel Use parallel processing? Default: FALSE
+#'
+#' @return
+#' @export
+#'
+#' @examples
 eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as input
     Y <- round(exprs(eset))
-#################################################
+    #################################################
     ## ## initial estimate of prob(X\in bg)
-##################################################
+    ##################################################
     Cell0=colMeans(Y==0) # each cell has this percentage 0
     plan(multiprocess)
     if (isTRUE(parallel)){
@@ -20,25 +30,25 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
     if (any((pi0.hat > 1))) {warning("Zero proportion is greater than estimation.")}
     pi0.hat <- pmin(pi0.hat, 1)
     prob0=pi0.hat*par1[1,]+ pi0.hat*(1-par1[1,])*dpois(0,par1[2,]) ## ZIP prob at 0
-############################################
+    ############################################
     ## First round 
-###########################################
+    ###########################################
     ## get the 1-low.prob quantile of ZIP
     x0=qpois(pmax(1-(1-low.prob)/(1-par1[1,]),0),par1[2,])
     Z= sweep(Y,2,x0)>0 # indicate if a gene is > bg 
     L=colSums(Y*Z)/1e6 # so far it is like simple total..
-
+    
     mu.g1=log2(rowSums(Z*Y)/rowSums(sweep(Z,2,L,FUN="*")))
     mu.g1[is.na(mu.g1)]=0 ## if allZ is 0, it gets NA, 
-### but we should shrink mu.g1 as well since some mu.g1 is estimated by only a few observations
+    ### but we should shrink mu.g1 as well since some mu.g1 is estimated by only a few observations
     ## leave it here for now.
     n.g1=rowSums(Z)
     y1=log2(sweep(Y,2,L,FUN="/")+1) #like CPM**
     s.g1=sqrt(rowSums(Z*sweep(y1,1,mu.g1)^2)/(n.g1-1)) ## CPM type of SD
     mu.g2 = shrink.mu(mu.g1,s.g1,n.g1)
-###############################################
+    ###############################################
     ## get sd.g
-############################################
+    ############################################
     res.g1=log2(sweep(Y,2,L,FUN="/")+1)-mu.g1
     ## mad of those res.g1 that are associated with Z==1
     tmp=array(0,dim=c(dim(res.g1),2))
@@ -52,29 +62,28 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
     ## add a shrinkage for sd.g1 
     sd.prior=squeezeVar(sd.g1^2,n.g1-1)
     sd.g2=sqrt(sd.prior$var.post)
-####################################### ########
-#####  gene specific bg. Z_gi
-#######################
+    ####################################### ########
+    #####  gene specific bg. Z_gi
+    #######################
     den.fg = den.bg = NA*Y
     
     if (isTRUE(parallel)){
         future_apply(1:ncol(Y), function(i){
             den.bg[,i]=dZinf.pois(Y[,i], par1[1,i], par1[2,i])
             den.fg[,i]=dLNP2(x=Y[,i], mu=mu.g1, sigma=sd.g2, l=L[i])
-            })
-    }
+        })
     } else {
         apply(1:ncol(Y), function(i){
             den.bg[,i]=dZinf.pois(Y[,i], par1[1,i], par1[2,i])
             den.fg[,i]=dLNP2(x=Y[,i], mu=mu.g1, sigma=sd.g2, l=L[i])
-            })
+        })
     }
     Z.fg=sweep(den.fg,2,1-pi0.hat,FUN="*")
     Z.bg=sweep(den.bg,2,pi0.hat,FUN="*")
     post.Z=Z.fg/(Z.fg+Z.bg)
     post.Z[is.na(post.Z)] <- 1
-
-### if I shrink mu.g
+    
+    ### if I shrink mu.g
     den.fg2 = NA*Y
     if (isTRUE(parallel)){
         future_apply(1:ncol(Y), function(i){
@@ -88,9 +97,9 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
     Z.fg2=sweep(den.fg2,2,1-pi0.hat,FUN="*")
     post.Z2=Z.fg2/(Z.fg2+Z.bg)
     post.Z2[is.na(post.Z2)] <- 1
-##################################################
+    ##################################################
     ## compute offsets
-##################################################
+    ##################################################
     Offset = Y*0
     Ylim=range(log2(1+Y)-mu.g1)
     Xlim=range(mu.g1)
@@ -118,16 +127,18 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
             Offset[subset,i]=lm1$fitted
         })
     }
-##################################################
+    ##################################################
     ## assemble the estimators into sc2pSet object
-##################################################
+    ##################################################
     ## add mu and sd to feature data
     fdata <- fData(eset)
     fdata2 <- as.data.frame(cbind(fdata, mu.g2, sd.g2))
     colnames(fdata2) <- c(colnames(fdata), "mean", "sd")
-    fvar <- rbind(fvarMetadata(eset), "mean"="shrinkage estimated foreground mean",
+    fvar <- rbind(fvarMetadata(eset), 
+                  "mean"="shrinkage estimated foreground mean",
                   "sd"="shrinkage estimated foreground standard deviation")
-    featureData <- new("AnnotatedDataFrame", data=fdata2,
+    featureData <- new("AnnotatedDataFrame", 
+                       data=fdata2,
                        varMetadata=fvar)
     ## add lambda and p0 to phenoData
     pdata <- pData(eset)
@@ -137,7 +148,7 @@ eset2Phase <- function(eset, low.prob=0.99, parallel = FALSE){  ## takes eSet as
                  "lambda"="mean of background poisson",
                  "L"="foreground library size")
     phenoData <- new("AnnotatedDataFrame", data=pdata2, varMetadata=pvar)
-        
+    
     out <- new("sc2pSet", exprs=Y, Z=post.Z2, Offset=Offset,
                phenoData=phenoData,
                featureData=featureData,
